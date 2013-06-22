@@ -10,5 +10,5 @@ Introducing Planarizer!
  - Hover mouse over face to act as plane-source
  - Press 'D'
 
-More detailed instructions coming soon.
+More detailed instructions coming soon, for now [here's a video on youtube](http://www.youtube.com/watch?v=tXR97QFIR3A)
 

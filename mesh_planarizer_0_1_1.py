@@ -178,6 +178,9 @@ class MeshPlanarizer(bpy.types.Operator):
 
         bmesh.update_edit_mesh(context.active_object.data)
 
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.mode_set(mode='EDIT')
+
         return {'FINISHED'}
 
 
