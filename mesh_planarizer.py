@@ -49,6 +49,10 @@ def project_to_plane(point, va, vb):
     return project_to_plane_normal(point, normal)
 
 
+def get_face_closest_to_3dcursor(faces, context, cursor):
+    print(cursor)
+
+
 def get_face_closest_to_mouse(faces, context, mouse_pos):
     ob = context.active_object
     region = context.region
@@ -70,7 +74,7 @@ def get_face_closest_to_mouse(faces, context, mouse_pos):
     return min_dist[1]
 
 
-def fix_nonplanar_face(bm, vert_sel, context, event):
+def fix_nonplanar_face(bm, vert_sel, cursor, context, event):
     ob = context.active_object
     region = context.region
     region_3d = context.space_data.region_3d
@@ -84,6 +88,7 @@ def fix_nonplanar_face(bm, vert_sel, context, event):
     # Find edges that do not contain selected vertex
     mouse_pos = mathutils.Vector([event.mouse_region_x, event.mouse_region_y])
     face = get_face_closest_to_mouse(faces, context, mouse_pos)
+    get_face_closest_to_3dcursor(faces, context, cursor)
 
     # Find the unselected vertices of the face
     face_verts = [v for v in face.verts if not v.select]
@@ -113,7 +118,7 @@ def fix_nonplanar_face(bm, vert_sel, context, event):
     vert_sel.co.xyz = (vert_sel.co - new_vertex)
 
 
-def fix_multi_nonplanar_verts(bm, vert_sel, context, event):
+def fix_multi_nonplanar_verts(bm, vert_sel, cursor, context, event):
     ob = context.active_object
     region = context.region
     region_3d = context.space_data.region_3d
@@ -167,10 +172,13 @@ class MeshPlanarizer(bpy.types.Operator):
         if not selected_verts:
             return {'CANCELLED': "Error"}
 
+        cursor = self.getCursor()
+
         if len(selected_verts) > 1:
-            fix_multi_nonplanar_verts(bm, selected_verts, context, event)
+            fix_multi_nonplanar_verts(bm, selected_verts, cursor,
+                                      context, event)
         else:
-            fix_nonplanar_face(bm, selected_verts[0], context, event)
+            fix_nonplanar_face(bm, selected_verts[0], cursor, context, event)
 
         bmesh.update_edit_mesh(context.active_object.data)
 
@@ -179,22 +187,66 @@ class MeshPlanarizer(bpy.types.Operator):
 
         return {'FINISHED'}
 
+    @classmethod
+    def getCursor(cls):
+        spc = cls.findSpace()
+        return spc.cursor_location
+
+    @classmethod
+    def setCursor(cls, coordinates):
+        spc = cls.findSpace()
+        spc.cursor_location = coordinates
+
+    @classmethod
+    def findSpace(cls):
+        area = None
+        for area in bpy.data.window_managers[0].windows[0].screen.areas:
+            if area.type == 'VIEW_3D':
+                break
+        if area.type != 'VIEW_3D':
+            return None
+        for space in area.spaces:
+            if space.type == 'VIEW_3D':
+                break
+        if space.type != 'VIEW_3D':
+            return None
+        return space
+
+"""
+class VIEW3D_MT_edit_mesh_planarizer(bpy.types.Menu):
+    bl_label = "Planarizer"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator("mesh.planarizer", text="Flatten")
+
+"""
 
 classes = [MeshPlanarizer]
-addon_keymaps = []
+
+
+def menu_func(self, context):
+    self.layout.operator(MeshPlanarizer.bl_idname, text="Planarizer")
 
 
 def register():
     # add operator
+    print(__name__)
     for c in classes:
         bpy.utils.register_class(c)
 
+    bpy.types.VIEW3D_MT_edit_mesh_specials.append(menu_func)
+    bpy.types.VIEW3D_MT_edit_mesh_vertices.append(menu_func)
+
+    #bpy.types.WindowManager.planarizer = bpy.props.PointerProperty(\
+    #    type = PlanarizerProps)
+
     # add keymap entry
-    km = bpy.context.window_manager.keyconfigs.addon.keymaps.new(
-        name='Mesh',
-        space_type='EMPTY')
-    kmi = km.keymap_items.new("mesh.planarizer", "D", "PRESS")
-    addon_keymaps.append(km)
+    #km = bpy.context.window_manager.keyconfigs.addon.keymaps.new(
+    #    name='Mesh',
+    #    space_type='EMPTY')
+    #kmi = km.keymap_items.new("mesh.planarizer", "D", "PRESS")
+    #addon_keymaps.append(km)
 
 
 def unregister():
@@ -202,10 +254,17 @@ def unregister():
     for c in classes:
         bpy.utils.unregister_class(c)
 
+    bpy.types.VIEW3D_MT_edit_mesh_specials.remove(menu_func)
+    bpy.types.VIEW3D_MT_edit_mesh_vertices.append(menu_func)
+
+    #try:
+    #    del bpy.types.WindowManager.planarizer
+    #except:
+    #    pass
     # remove keymap
-    for km in addon_keymaps:
-        bpy.context.window_manager.keyconfigs.addon.keymaps.remove(km)
-    addon_keymaps.clear()
+    #for km in addon_keymaps:
+    #    bpy.context.window_manager.keyconfigs.addon.keymaps.remove(km)
+    #addon_keymaps.clear()
 
 if __name__ == '__main__':
     register()
