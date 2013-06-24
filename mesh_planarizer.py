@@ -26,7 +26,8 @@ bl_info = {
     'location': "Editmode > D",
     'warning': "",
     'description': "Corrects non-planar quads",
-    'category': 'Mesh'}
+    'category': 'Mesh',
+    'support': 'COMMUNITY'}
 
 import bmesh
 import mathutils
@@ -35,20 +36,17 @@ import itertools
 from bpy_extras import view3d_utils
 
 
-def project_to_plane(point, va, vb):
-    va.normalize()
-    vb.normalize()
-    norm = va.cross(vb)
-    norm.normalize()
-
-    adjust = norm.dot(point)
-    return norm.xyz * adjust
-
-
 def project_to_plane_normal(point, normal):
     normal.normalize()
     adjust = normal.dot(point)
     return normal.xyz * adjust
+
+
+def project_to_plane(point, va, vb):
+    va.normalize()
+    vb.normalize()
+    normal = va.cross(vb)
+    return project_to_plane_normal(point, normal)
 
 
 def get_face_closest_to_mouse(faces, context, mouse_pos):
@@ -124,9 +122,7 @@ def fix_multi_nonplanar_verts(bm, vert_sel, context, event):
     mouse_pos = mathutils.Vector([event.mouse_region_x, event.mouse_region_y])
     face = get_face_closest_to_mouse(bm.faces, context, mouse_pos)
 
-    # Edges connected to selected vertices
-
-    # Find an unselected vertex shared by a selected vertices' edg
+    # Find an unselected vertex shared by a selected vertices' edge
     ref_vert = None
     for v in vert_sel:
         for edge in v.link_edges:
