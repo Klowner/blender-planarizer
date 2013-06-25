@@ -49,8 +49,21 @@ def project_to_plane(point, va, vb):
     return project_to_plane_normal(point, normal)
 
 
-def get_face_closest_to_3dcursor(faces, context, cursor):
-    print(cursor)
+def get_face_closest_to_vertex(faces, context, target):
+    ob = context.active_object
+    region = context.region
+    region_3d = context.space_data.region_3d
+
+    optimal_faces = []
+    min_dist = False
+
+    for face in faces:
+        face_pos = face.calc_center_median()
+        dist = (face_pos - target).length
+        if not min_dist or dist < min_dist[0]:
+            min_dist = (dist, face)
+
+    return min_dist[1]
 
 
 def get_face_closest_to_mouse(faces, context, mouse_pos):
@@ -233,20 +246,22 @@ class MeshPlanarizer(bpy.types.Operator):
 
     plane_anchor_items = (
         ('cursor', "Cursor",
-            "Plane will be placed to intersect 3dCursor"),
+            "Plane will be placed so as to intersect the cursor"),
         ('median', "Median",
-            "Plane will be placed to itersect average position of selected "
-            "vertices")
+            "Plane will be placed so as to intersect average position of "
+            "selected vertices"),
+        ('connected', 'Connected Vertex',
+            "Result will lie on the same plane a another connected vertex"),
     )
 
-    plane_source = bpy.props.EnumProperty(name="Plane Source",
+    plane_source = bpy.props.EnumProperty(name="Plane Direction Source",
                                           items=plane_source_items,
                                           description="Source for plane",
                                           default='cursor')
 
     plane_anchor = bpy.props.EnumProperty(name="Anchor to",
                                           items=plane_anchor_items,
-                                          description="Plane anchor point",
+                                          description="Anchor Point",
                                           default='cursor')
 
     def execute(self, context):
@@ -257,6 +272,8 @@ class MeshPlanarizer(bpy.types.Operator):
             self.report({'ERROR'}, "No vertices selected")
             return {'CANCELLED'}
 
+        plane = self.getPlane(selected_verts)
+
         if len(selected_verts) > 1:
             pass
         else:
@@ -265,6 +282,7 @@ class MeshPlanarizer(bpy.types.Operator):
         bmesh.update_edit_mesh(context.active_object.data)
 
         return {'FINISHED'}
+
 
     @classmethod
     def getCursor(cls):
@@ -291,60 +309,22 @@ class MeshPlanarizer(bpy.types.Operator):
             return None
         return space
 
-"""
-class MeshPlanarizer(bpy.types.Operator, MeshPlanarizerBase):
-    bl_idname = "mesh.planarizer"
-    bl_options = {'REGISTER', 'UNDO'}
-    bl_label = 'Planarizer'
+    def getPlane(self, selected_verts):
+        plane_methods = {
+            'cursor': self.getPlaneFromCursor,
+            'average': self.getPlaneFromMedian}
 
+        return plane_methods[self.plane_source](selected_verts)
 
-class MeshPlanarizer3dCursor(bpy.types.Operator, MeshPlanarizerBase):
-    bl_idname = "mesh.planarizer_3dcursor"
-    bl_options = {'REGISTER', 'UNDO'}
-    bl_label = 'Planarizer with 3dCursor'
+    @classmethod
+    def getPlaneFromCursor(cls, selected_verts):
+        pass
 
-"""
-"""
-def register():
-    # add operator
-    print(__name__)
-    for c in classes:
-        bpy.utils.register_class(c)
+    @classmethod
+    def getPlaneFromAverage(cls, selected_verts):
+        pass
 
-    bpy.types.VIEW3D_MT_edit_mesh_specials.append(menu_func)
-    bpy.types.VIEW3D_MT_edit_mesh_vertices.append(menu_func)
-
-    #bpy.types.WindowManager.planarizer = bpy.props.PointerProperty(\
-    #    type = PlanarizerProps)
-
-    # add keymap entry
-    #km = bpy.context.window_manager.keyconfigs.addon.keymaps.new(
-    #    name='Mesh',
-    #    space_type='EMPTY')
-    #kmi = km.keymap_items.new("mesh.planarizer", "D", "PRESS")
-    #addon_keymaps.append(km)
-
-
-def unregister():
-    # remove operator
-    for c in classes:
-        bpy.utils.unregister_class(c)
-
-    bpy.types.VIEW3D_MT_edit_mesh_specials.remove(menu_func)
-    bpy.types.VIEW3D_MT_edit_mesh_vertices.append(menu_func)
-
-    #try:
-    #    del bpy.types.WindowManager.planarizer
-    #except:
-    #    pass
-    # remove keymap
-    #for km in addon_keymaps:
-    #    bpy.context.window_manager.keyconfigs.addon.keymaps.remove(km)
-    #addon_keymaps.clear()
-"""
-
-classes = [
-    MeshPlanarizer]
+classes = [MeshPlanarizer]
 
 
 def menu_func(self, context):
