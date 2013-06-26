@@ -4,11 +4,5 @@ Tired of dealing with non-planar quads? Want to flatten some vertices to an axis
 
 Introducing Planarizer!
 
-
-## Basic instructions 
- - Select vertices in edit mode
- - Hover mouse over face to act as plane-source
- - Press 'D'
-
-More detailed instructions coming soon, for now [here's a video on youtube](http://youtu.be/ZXsB4nTRwmc)
+More detailed instructions coming soon, for now [here's a video on youtube](http://youtu.be/XYROkaygnys)
 
