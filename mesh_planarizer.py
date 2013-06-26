@@ -36,78 +36,17 @@ import itertools
 from bpy_extras import view3d_utils
 
 
-def project_to_plane_normal(point, normal):
+def convert_vectors_to_plane(va, vb, vc):
+    vect_a = vb - va
+    vect_b = vb - vc
+    normal = vect_a.cross(vect_b)
     normal.normalize()
-    adjust = normal.dot(point)
-    return normal.xyz * adjust
+    return normal
 
 
-def project_to_plane(point, va, vb):
-    va.normalize()
-    vb.normalize()
-    normal = va.cross(vb)
-    return project_to_plane_normal(point, normal)
-
-
-def get_face_closest_to_vertex(faces, context, target):
-    ob = context.active_object
-    region = context.region
-    region_3d = context.space_data.region_3d
-
-    optimal_faces = []
-    min_dist = False
-
-    for face in faces:
-        face_pos = face.calc_center_median()
-        dist = (face_pos - target).length
-        if not min_dist or dist < min_dist[0]:
-            min_dist = (dist, face)
-
-    return min_dist[1]
-
-
-def get_face_closest_to_mouse(faces, context, mouse_pos):
-    ob = context.active_object
-    region = context.region
-    region_3d = context.space_data.region_3d
-
-    optimal_faces = []
-    min_dist = False
-
-    for face in faces:
-        face_pos = face.calc_center_median()
-        world_face_pos = ob.matrix_world * face_pos
-        screen_face_pos = view3d_utils.location_3d_to_region_2d(region,
-                                                                region_3d,
-                                                                world_face_pos)
-        dist = (mouse_pos - screen_face_pos).length
-        if not min_dist or dist < min_dist[0]:
-            min_dist = (dist, face)
-
-    return min_dist[1]
-
-
-def fix_nonplanar_face(bm, vert_sel, cursor, context, event):
-    ob = context.active_object
-    region = context.region
-    region_3d = context.space_data.region_3d
-
-    # Find linked edges that are connected to faces
-    edges = [edge for edge in vert_sel.link_edges if len(edge.link_faces) > 0]
-
-    # Get all connected quads
-    faces = [face for face in vert_sel.link_faces if len(face.verts) == 4]
-
-    # Find edges that do not contain selected vertex
-    mouse_pos = mathutils.Vector([event.mouse_region_x, event.mouse_region_y])
-    face = get_face_closest_to_mouse(faces, context, mouse_pos)
-    get_face_closest_to_3dcursor(faces, context, cursor)
-
-    # Find the unselected vertices of the face
-    face_verts = [v for v in face.verts if not v.select]
-
+def get_vectors_from_diagonal(vert, face):
     # Find the edges of the face that don't contain the selected vertex
-    face_edges = [edge for edge in face.edges if vert_sel not in edge.verts]
+    face_edges = [edge for edge in face.edges if vert not in edge.verts]
 
     # Find the middle vertex shared between the two edges
     middle_vert = None
@@ -122,113 +61,30 @@ def fix_nonplanar_face(bm, vert_sel, cursor, context, event):
         v = [v for v in edge.verts if not v == middle_vert]
         other_verts.append(v[0])
 
-    selected_vect = vert_sel.co - middle_vert.co
-    plane_va = middle_vert.co - other_verts[0].co
-    plane_vb = middle_vert.co - other_verts[1].co
-
-    new_vertex = project_to_plane(selected_vect, plane_va, plane_vb)
-
-    vert_sel.co.xyz = (vert_sel.co - new_vertex)
-
-
-def fix_multi_nonplanar_verts(bm, vert_sel, cursor, context, event):
-    ob = context.active_object
-    region = context.region
-    region_3d = context.space_data.region_3d
-
-    # Find face under mouse cursor
-    mouse_pos = mathutils.Vector([event.mouse_region_x, event.mouse_region_y])
-    face = get_face_closest_to_mouse(bm.faces, context, mouse_pos)
-
-    # Find an unselected vertex shared by a selected vertices' edge
-    ref_vert = None
-    for v in vert_sel:
-        for edge in v.link_edges:
-            for edge_v in edge.verts:
-                if edge_v not in vert_sel:
-                    ref_vert = edge_v
-
-        if ref_vert:
-            ref_vert = ref_vert.co
-            break
-
-    # All connected verts must be selected, so we fall-back
-    # to using the median point of the selected face
-    if not ref_vert:
-        ref_vert = face.calc_center_median()
-
-    normal = face.normal
-
-    # Project selected points to nearest point on plane defined
-    # by the hovered face's surface normal
-    for v in vert_sel:
-        local_v = v.co - ref_vert
-        adjustment = project_to_plane_normal(local_v, normal)
-        v.co.xyz = (v.co.xyz - adjustment)
+    #
+    #   B----C    returns vertices (A, B, C)
+    #   |    |
+    #   A----D <- D is selected
+    #
+    return (other_verts[0].co, middle_vert.co, other_virts[1].co)
 
 
-class MeshPlanarizer_old(bpy.types.Operator):
-    """Adjusts selected vertices to lie on plane defined by """ \
-    """face that is nearest to the 3D Cursor"""
-    bl_idname = "mesh.planarizer"
-    bl_label = "Fix non-planar face"
-    bl_options = {'REGISTER', 'UNDO'}
+def project_vertex_onto_plane(vert, anchor, plane):
+    point = vert.co - anchor
+    return vert.co - plane * plane.dot(point)
 
-    @classmethod
-    def poll(cls, context):
-        ob = context.active_object
-        return (ob and ob.type == 'MESH' and context.mode == 'EDIT_MESH')
 
-    def invoke(self, context, event):
-        bm = bmesh.from_edit_mesh(context.active_object.data)
-        selected_verts = [v for v in bm.verts if v.select]
+def get_face_closest_to_point(faces, point):
+    optimal_faces = []
+    min_dist = False
 
-        if not selected_verts:
-            return {'CANCELLED': "Error"}
+    for face in faces:
+        face_pos = face.calc_center_median()
+        dist = (face_pos - point).length
+        if not min_dist or dist < min_dist[0]:
+            min_dist = (dist, face)
 
-        cursor = self.getCursor()
-
-        if len(selected_verts) > 1:
-            fix_multi_nonplanar_verts(bm, selected_verts, cursor,
-                                      context, event)
-        else:
-            fix_nonplanar_face(bm, selected_verts[0], cursor, context, event)
-
-        bmesh.update_edit_mesh(context.active_object.data)
-
-        bpy.ops.object.mode_set(mode='OBJECT')
-        bpy.ops.object.mode_set(mode='EDIT')
-
-        return {'FINISHED'}
-
-    def execute(self, context):
-        print('execute', self, context)
-        return {'FINISHED'}
-
-    @classmethod
-    def getCursor(cls):
-        spc = cls.findSpace()
-        return spc.cursor_location
-
-    @classmethod
-    def setCursor(cls, coordinates):
-        spc = cls.findSpace()
-        spc.cursor_location = coordinates
-
-    @classmethod
-    def findSpace(cls):
-        area = None
-        for area in bpy.data.window_managers[0].windows[0].screen.areas:
-            if area.type == 'VIEW_3D':
-                break
-        if area.type != 'VIEW_3D':
-            return None
-        for space in area.spaces:
-            if space.type == 'VIEW_3D':
-                break
-        if space.type != 'VIEW_3D':
-            return None
-        return space
+    return min_dist[1]
 
 
 class MeshPlanarizer(bpy.types.Operator):
@@ -254,12 +110,12 @@ class MeshPlanarizer(bpy.types.Operator):
             "Result will lie on the same plane a another connected vertex"),
     )
 
-    plane_source = bpy.props.EnumProperty(name="Plane Direction Source",
+    plane_source = bpy.props.EnumProperty(name="Plane Source",
                                           items=plane_source_items,
                                           description="Source for plane",
                                           default='cursor')
 
-    plane_anchor = bpy.props.EnumProperty(name="Anchor to",
+    plane_anchor = bpy.props.EnumProperty(name="Anchor To",
                                           items=plane_anchor_items,
                                           description="Anchor Point",
                                           default='cursor')
@@ -268,21 +124,37 @@ class MeshPlanarizer(bpy.types.Operator):
         bm = bmesh.from_edit_mesh(context.active_object.data)
         selected_verts = [v for v in bm.verts if v.select]
 
+        self.num_verts = len(selected_verts)
+        self.bmesh = bm
+        self.inv_world_matrix = context.active_object.matrix_world.inverted()
+
         if not selected_verts:
             self.report({'ERROR'}, "No vertices selected")
             return {'CANCELLED'}
 
-        plane = self.getPlane(selected_verts)
+        plane_vector = self.getPlane(selected_verts, bm)
+        anchor_vector = self.getAnchor(selected_verts, bm)
 
-        if len(selected_verts) > 1:
-            pass
-        else:
-            pass
+        for v in selected_verts:
+            v.co = project_vertex_onto_plane(v, anchor_vector, plane_vector)
 
         bmesh.update_edit_mesh(context.active_object.data)
-
         return {'FINISHED'}
 
+    def draw(self, context):
+        layout = self.layout
+
+        row = layout.row()
+
+        if self.num_verts > 1:
+            row.enabled = True
+            row.prop(self, 'plane_source')
+        else:
+            self.plane_source = 'cursor'
+            row.enabled = False
+            row.prop(self, 'plane_source')
+
+        layout.prop(self, 'plane_anchor')
 
     @classmethod
     def getCursor(cls):
@@ -309,20 +181,113 @@ class MeshPlanarizer(bpy.types.Operator):
             return None
         return space
 
-    def getPlane(self, selected_verts):
+    def getPlane(self, selected_verts, bm):
         plane_methods = {
             'cursor': self.getPlaneFromCursor,
-            'average': self.getPlaneFromMedian}
+            'average': self.getPlaneFromAverage}
 
-        return plane_methods[self.plane_source](selected_verts)
+        return plane_methods[self.plane_source](selected_verts, bm)
 
-    @classmethod
-    def getPlaneFromCursor(cls, selected_verts):
-        pass
+    def getPlaneFromCursor(self, selected_verts, bm):
+        cursor_pos = self.inv_world_matrix * self.getCursor()
+        faces = self.getConnectedFaces(selected_verts)
+        face = get_face_closest_to_point(faces, cursor_pos)
 
-    @classmethod
-    def getPlaneFromAverage(cls, selected_verts):
-        pass
+        if len(selected_verts) > 1:
+            return face.normal
+        else:
+            (va, vb, vc) = self.getVectFromDiagonal(selected_verts[0], face)
+            return convert_vectors_to_plane(va, vb, vc)
+
+    def getPlaneFromAverage(self, selected_verts, bm):
+        faces = self.getConnectedFaces(selected_verts)
+        scale = 1.0 / len(faces)
+        normal = mathutils.Vector([0, 0, 0])
+        for f in faces:
+            normal += f.normal * scale
+        normal.normalize()
+        return normal
+
+    def getAnchor(self, selected_verts, bm):
+        anchor_methods = {
+            'cursor': self.getAnchorCursor,
+            'median': self.getAnchorMedian,
+            'connected': self.getAnchorConnected}
+
+        return anchor_methods[self.plane_anchor](selected_verts, bm)
+
+    def getAnchorCursor(self, selected_verts, bm):
+        return self.inv_world_matrix * self.getCursor()
+
+    def getAnchorMedian(self, selected_verts, bm):
+        avg_vertex = mathutils.Vector()
+        scale = 1.0 / len(selected_verts)
+        for v in selected_verts:
+            avg_vertex += (v.co * scale)
+        return avg_vertex
+
+    def getAnchorConnected(self, selected_verts, bm):
+        if len(selected_verts) == 1:
+            cursor_pos = self.getCursor()
+            faces = self.getConnectedFaces(selected_verts)
+            face = get_face_closest_to_point(faces, cursor_pos)
+            return self.getVectFromDiagonal(selected_verts[0], face)[1]
+
+        # Find an unselected vertex shared by a selected vertices' edge
+        ref_vert = None
+        for v in selected_verts:
+            for edge in v.link_edges:
+                for edge_v in edge.verts:
+                    if edge_v not in selected_verts:
+                        ref_vert = edge_v
+
+            if ref_vert:
+                ref_vert = ref_vert.co
+                break
+
+        return ref_vert
+
+    def getConnectedFaces(self, selected_verts):
+        if len(selected_verts) > 1:
+            # In multi-vertex mode, we use any face as our source
+            return self.bmesh.faces
+        else:
+            # Get all connected quads
+            return [face for face in selected_verts[0].link_faces if
+                    len(face.verts) == 4]
+
+    def getVectFromDiagonal(self, vert, face):
+        # Find the edges of the face that don't contain the selected vertex
+        face_edges = [edge for edge in face.edges if vert not in edge.verts]
+
+        # Get all connected quads
+        faces = [face for face in vert.link_faces if len(face.verts) == 4]
+
+        # Find the unselected vertices of the face
+        face_verts = [v for v in face.verts if not v.select]
+
+        # Find the middle vertex shared between the two edges
+        middle_vert = None
+        for v in face_verts:
+            middle_vert = (v if v in face_edges[0].verts and
+                           v in face_edges[1].verts else None)
+            if middle_vert:
+                break
+
+        other_verts = []
+        for edge in face_edges:
+            v = [v for v in edge.verts if not v == middle_vert]
+            other_verts.append(v[0])
+
+        #
+        #   B----C
+        #   |    |
+        #   A----D <- D is selected
+        #
+        # returns vertices (A, B, C)
+
+        return (other_verts[0].co, middle_vert.co, other_verts[1].co)
+
 
 classes = [MeshPlanarizer]
 
