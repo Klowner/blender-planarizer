@@ -15,15 +15,15 @@
 #  Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 #
 # ##### END GPL LICENSE BLOCK #####
-
+# $Id:$
 # <pep8 compliant>
 
 bl_info = {
     'name': 'Planarizer',
     'author': "Mark Riedesel",
-    'version': (0, 1, 1),
+    'version': (0, 2, 0),
     'blender': (2, 66, 3),
-    'location': "Editmode > D",
+    'location': "View3D > Specials (W-key)",
     'warning': "",
     'description': "Corrects non-planar quads",
     'category': 'Mesh',
