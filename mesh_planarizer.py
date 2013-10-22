@@ -21,19 +21,19 @@
 bl_info = {
     'name': 'Planarizer',
     'author': "Mark Riedesel (Klowner)",
-    'version': (0, 2, 1),
+    'version': (0, 2, 2),
     'blender': (2, 66, 3),
     'location': "View3D > Specials (W-key)",
     'warning': "",
     'description': "Corrects non-planar quads",
     'category': 'Mesh',
+    'wiki_url': "http://wiki.blender.org/index.php/Extensions:2.6/Py/"
+            "Scripts/Modeling/Planarizer",
     'support': 'COMMUNITY'}
 
 import bmesh
 import mathutils
 import bpy
-import itertools
-from bpy_extras import view3d_utils
 
 
 def convert_vectors_to_plane(va, vb, vc):
@@ -44,38 +44,12 @@ def convert_vectors_to_plane(va, vb, vc):
     return normal
 
 
-def get_vectors_from_diagonal(vert, face):
-    # Find the edges of the face that don't contain the selected vertex
-    face_edges = [edge for edge in face.edges if vert not in edge.verts]
-
-    # Find the middle vertex shared between the two edges
-    middle_vert = None
-    for v in face_verts:
-        middle_vert = (v if v in face_edges[0].verts and
-                       v in face_edges[1].verts else None)
-        if middle_vert:
-            break
-
-    other_verts = []
-    for edge in face_edges:
-        v = [v for v in edge.verts if not v == middle_vert]
-        other_verts.append(v[0])
-
-    #
-    #   B----C    returns vertices (A, B, C)
-    #   |    |
-    #   A----D <- D is selected
-    #
-    return (other_verts[0].co, middle_vert.co, other_virts[1].co)
-
-
 def project_vertex_onto_plane(vert, anchor, plane):
     point = vert.co - anchor
     return vert.co - plane * plane.dot(point)
 
 
 def get_face_closest_to_point(faces, point):
-    optimal_faces = []
     min_dist = False
 
     for face in faces:
@@ -302,7 +276,7 @@ class MeshPlanarizer(bpy.types.Operator):
         face_edges = [edge for edge in face.edges if vert not in edge.verts]
 
         # Get all connected ngons
-        faces = [face for face in vert.link_faces if len(face.verts) > 3]
+        # faces = [f for f in vert.link_faces if len(face.verts) > 3]
 
         # Find the unselected vertices of the face
         face_verts = [v for v in face.verts if not v.select]
