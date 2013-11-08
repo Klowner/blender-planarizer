@@ -21,7 +21,7 @@
 bl_info = {
     'name': 'Planarizer',
     'author': "Mark Riedesel (Klowner)",
-    'version': (0, 2, 2),
+    'version': (0, 3, 0),
     'blender': (2, 66, 3),
     'location': "View3D > Specials (W-key)",
     'warning': "",
