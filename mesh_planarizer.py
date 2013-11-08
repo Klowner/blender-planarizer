@@ -99,6 +99,15 @@ class MeshPlanarizer(bpy.types.Operator):
             "Selection will be iterated over and processed in succession"),
     )
 
+    axis_items = (
+        ('x', "X",
+            "Adjustment is restricted to X axis"),
+        ('y', "Y",
+            "Adjustment is restricted to Y axis"),
+        ('z', "Z",
+            "Adjustment is restricted to Z axis"),
+    )
+
     plane_source = bpy.props.EnumProperty(name="Plane Source",
                                           items=plane_source_items,
                                           description="Source for plane",
@@ -113,6 +122,14 @@ class MeshPlanarizer(bpy.types.Operator):
                                             items=iteration_mode_items,
                                             description="Selection Grouping",
                                             default='grouped')
+
+    single_axis_bool = bpy.props.BoolProperty(name="Use single axis",
+                                              default=False)
+
+    single_axis = bpy.props.EnumProperty(name="Axis",
+                                           items=axis_items,
+                                           description="Restrict to axis",
+                                           default='x')
 
     def execute(self, context):
         bm = bmesh.from_edit_mesh(context.active_object.data)
@@ -162,6 +179,12 @@ class MeshPlanarizer(bpy.types.Operator):
 
         if self.num_verts == 1 or self.iteration_mode == 'individual':
             col.enabled = False
+
+        layout.prop(self, 'single_axis_bool')
+        axis_row = layout.row()
+        axis_row.prop(self, 'single_axis', expand=True)
+        axis_row.enabled = self.single_axis_bool
+
 
     @classmethod
     def getCursor(cls):
