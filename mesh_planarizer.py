@@ -44,10 +44,22 @@ def convert_vectors_to_plane(va, vb, vc):
     return normal
 
 
-def project_vertex_onto_plane(vert, anchor, plane):
+def project_vertex_onto_plane(vert, anchor, plane, **kwargs):
     point = vert.co - anchor
     return vert.co - plane * plane.dot(point)
 
+
+def project_vertex_onto_plane_single_axis(vert, anchor, plane, axis='x'):
+    a = mathutils.Vector(vert.co)
+    b = mathutils.Vector(vert.co)
+    setattr(a, axis, 1.0e4)
+    setattr(b, axis, -1.0e4)
+    pos = mathutils.geometry.intersect_line_plane(a,
+                                                  b,
+                                                  anchor,
+                                                  plane)
+    setattr(a, axis, getattr(pos, axis))
+    return a
 
 def get_face_closest_to_point(faces, point):
     min_dist = False
@@ -138,6 +150,7 @@ class MeshPlanarizer(bpy.types.Operator):
         self.num_verts = len(selected_verts)
         self.bmesh = bm
         self.inv_world_matrix = context.active_object.matrix_world.inverted()
+        axis = self.single_axis
 
         if self.num_verts == 1 or self.iteration_mode == 'individual':
             self.plane_anchor = 'connected'
@@ -147,13 +160,19 @@ class MeshPlanarizer(bpy.types.Operator):
             self.report({'ERROR'}, "No vertices selected")
             return {'CANCELLED'}
 
+        if self.single_axis_bool:
+            projection_method = project_vertex_onto_plane_single_axis
+        else:
+            projection_method = project_vertex_onto_plane
+
         if self.iteration_mode == 'grouped':
             plane_vector = self.getPlane(selected_verts, bm)
             anchor_vector = self.getAnchor(selected_verts, bm)
             for v in selected_verts:
-                v.co = project_vertex_onto_plane(v,
-                                                 anchor_vector,
-                                                 plane_vector)
+                v.co = projection_method(v,
+                                         anchor_vector,
+                                         plane_vector,
+                                         axis=axis)
 
         elif self.iteration_mode == 'individual':
             cursor_pos = self.inv_world_matrix * self.getCursor()
@@ -162,8 +181,10 @@ class MeshPlanarizer(bpy.types.Operator):
             for v in selected_verts:
                 plane_vector = self.getPlane([v], bm)
                 anchor_vector = self.getAnchor([v], bm)
-                v.co = project_vertex_onto_plane(v, anchor_vector,
-                                                 plane_vector)
+                v.co = projection_method(v,
+                                         anchor_vector,
+                                         plane_vector,
+                                         axis=axis)
 
         bmesh.update_edit_mesh(context.active_object.data)
         return {'FINISHED'}
