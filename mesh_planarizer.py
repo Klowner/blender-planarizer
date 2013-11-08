@@ -58,7 +58,9 @@ def project_vertex_onto_plane_single_axis(vert, anchor, plane, axis='x'):
                                                   b,
                                                   anchor,
                                                   plane)
-    setattr(a, axis, getattr(pos, axis))
+    if pos:
+        setattr(a, axis, getattr(pos, axis))
+
     return a
 
 def get_face_closest_to_point(faces, point):
